@@ -32,7 +32,7 @@ table{width:100%;border-collapse:collapse}th{background:#173f69;color:#fff;text-
 <aside class="side"><div class="brand">G10 Transport</div><div class="nav">
 <button data-screen="home" class="active">🏠 Accueil</button><button data-screen="admin">⚙️ Administration</button><button data-screen="ops">🧭 Chef d’exploitation</button><button data-screen="driver">🚌 Espace chauffeur</button><button data-screen="guard">🔑 Gardien / Clés</button><button data-screen="dir">📊 Direction</button>
 </div><div class="base">📍 Base opérationnelle<br><b>PK7 — Libreville</b><br><small><span id="busCountSide">4</span> bus Interurbain</small><div id="sessionBox" class="sessionBox"><b>Mode visiteur</b><span>Accueil uniquement</span></div></div></aside>
-<main><div class="top"><div><h1>G10 Transport — Interurbain</h1><div class="muted">V15.5 — Démo fonctionnelle en ligne</div></div><div id="syncBadge" class="badge">🟠 Connexion Firebase…</div></div>
+<main><div class="top"><div><h1>G10 Transport — Interurbain</h1><div class="muted">V15.5.1 — Démo fonctionnelle en ligne</div></div><div id="syncBadge" class="badge">🟠 Connexion Firebase…</div></div>
 
 <section id="home" class="screen active"><div class="panel"><h2>Accueil</h2><p class="muted">Bienvenue chez G10 Transports.</p><div class="homeHeroWrap"><img class="homeHeroImg" src="images/g10-interurbain-hero.jpg?v=20260927-2145" alt="Bienvenue chez G10 Interurbain"></div></div></section>
 
@@ -195,8 +195,29 @@ $('#authSubmit').onclick=async()=>{
 };
 qa('[data-tab]').forEach(b=>b.onclick=()=>{qa('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));['drivers','tarifs','bus','hotels','settings'].forEach(id=>$('#'+id).classList.toggle('active',id===b.dataset.tab))});
 qa('[data-tab2]').forEach(b=>b.onclick=()=>{qa('[data-tab2]').forEach(x=>x.classList.toggle('active',x===b));['assign','routes','follow','discipline'].forEach(id=>$('#'+id).classList.toggle('active',id===b.dataset.tab2))});
-function renderDrivers(){$('#driverRows').innerHTML=s.drivers.map(d=>'<div class="row"><div class="lab">Chauffeur</div><input data-name="'+d.id+'" value="'+d.name.replace(/"/g,'&quot;')+'" placeholder="Nom"><input data-phone="'+d.id+'" value="'+d.phone+'" placeholder="Téléphone"><input data-newcode="'+d.id+'" inputmode="numeric" maxlength="6" placeholder="'+(d.pinHash?'Changer PIN':'Définir PIN')+'"><select data-status="'+d.id+'"><option'+(d.status==='Actif'?' selected':'')+'>Actif</option><option'+(d.status==='Départ annoncé'?' selected':'')+'>Départ annoncé</option><option'+(d.status==='Inactif'?' selected':'')+'>Inactif</option></select><button class="btn red" data-del="'+d.id+'">×</button></div>').join('');
-qa('[data-name]').forEach(e=>e.onchange=()=>{drv(+e.dataset.name).name=e.value;save()});qa('[data-phone]').forEach(e=>e.onchange=()=>{drv(+e.dataset.phone).phone=e.value;save()});qa('[data-newcode]').forEach(e=>e.onchange=async()=>{let v=e.value.trim();if(!/^\d{4,6}$/.test(v)){alert('Le PIN doit contenir 4 à 6 chiffres.');e.value='';return}drv(+e.dataset.newcode).pinHash=await hashCode(v);e.value='';save()});qa('[data-status]').forEach(e=>e.onchange=()=>{drv(+e.dataset.status).status=e.value;save()});qa('[data-del]').forEach(e=>e.onclick=()=>{let id=+e.dataset.del;if(s.buses.some(b=>b.driverId===id))return alert('Désaffecte ce chauffeur du bus avant de le supprimer.');s.drivers=s.drivers.filter(d=>d.id!==id);save()})}
+function renderDrivers(){
+  $('#driverRows').innerHTML=s.drivers.map(d=>'<div class="row"><div class="lab">Chauffeur</div><label>Nom</label><input data-name="'+d.id+'" value="'+d.name.replace(/"/g,'&quot;')+'" placeholder="Nom"><label>Téléphone</label><input data-phone="'+d.id+'" value="'+d.phone+'" placeholder="Téléphone"><label>Nouveau code PIN</label><input data-newcode="'+d.id+'" inputmode="numeric" maxlength="6" placeholder="'+(d.pinHash?'Entrer un nouveau PIN':'Définir un PIN')+'"><div class="actions"><button class="btn green" data-pinsave="'+d.id+'">✅ Enregistrer le nouveau PIN</button></div><label>Statut</label><select data-status="'+d.id+'"><option'+(d.status==='Actif'?' selected':'')+'>Actif</option><option'+(d.status==='Départ annoncé'?' selected':'')+'>Départ annoncé</option><option'+(d.status==='Inactif'?' selected':'')+'>Inactif</option></select><div class="actions"><button class="btn red" data-del="'+d.id+'">🗑 Supprimer le chauffeur</button></div></div>').join('');
+  qa('[data-name]').forEach(e=>e.onchange=()=>{drv(+e.dataset.name).name=e.value;save()});
+  qa('[data-phone]').forEach(e=>e.onchange=()=>{drv(+e.dataset.phone).phone=e.value;save()});
+  qa('[data-pinsave]').forEach(e=>e.onclick=async()=>{
+    let id=+e.dataset.pinsave,d=drv(id),input=$('[data-newcode="'+id+'"]'),v=input.value.trim();
+    if(!/^\d{4,6}$/.test(v)){alert('Le PIN doit contenir 4 à 6 chiffres.');input.focus();return}
+    d.pinHash=await hashCode(v);
+    d.accessVersion=(d.accessVersion||1)+1;
+    s.accessLog.push({date:new Date().toISOString(),driverId:d.id,action:'PIN modifié par Administration'});
+    input.value='';
+    save();
+    alert('✅ Nouveau PIN enregistré et synchronisé Firebase.');
+  });
+  qa('[data-status]').forEach(e=>e.onchange=()=>{let d=drv(+e.dataset.status);d.status=e.value;if(e.value==='Inactif'){d.accessActive=false;d.accessVersion=(d.accessVersion||1)+1}else if(typeof d.accessActive!=='boolean')d.accessActive=true;save()});
+  qa('[data-del]').forEach(e=>e.onclick=()=>{
+    let id=+e.dataset.del,d=drv(id);
+    if(s.buses.some(b=>b.driverId===id))return alert('Désaffecte ce chauffeur du bus avant de le supprimer.');
+    if(!confirm('Supprimer '+(d?.name||'ce chauffeur')+' ? Son profil sera retiré de la liste.'))return;
+    s.drivers=s.drivers.filter(x=>x.id!==id);
+    save();
+  })
+}
 $('#addDriver').onclick=()=>{let id=Math.max(0,...s.drivers.map(d=>d.id))+1;s.drivers.push({id,name:'Nouveau chauffeur',phone:'',status:'Actif',pinHash:''});save();setTimeout(()=>{let e=$('[data-name="'+id+'"]');if(e){e.focus();e.select()}},0)};
 function renderTarifs(){ $('#tarifBody').innerHTML=s.routes.map(r=>'<tr><td><input data-rname="'+r.id+'" value="'+r.name.replace(/"/g,'&quot;')+'"></td><td><input type="number" data-rprice="'+r.id+'" value="'+r.price+'"></td><td><input type="number" data-rone="'+r.id+'" value="'+r.one+'"></td><td><input type="number" data-rround="'+r.id+'" value="'+r.round+'"></td><td><input data-rmode="'+r.id+'" value="'+r.mode.replace(/"/g,'&quot;')+'"></td><td><button class="btn red" data-rdel="'+r.id+'">×</button></td></tr>').join('');qa('[data-rname]').forEach(e=>e.onchange=()=>{route(e.dataset.rname).name=e.value.trim();save()});qa('[data-rprice]').forEach(e=>e.onchange=()=>{route(e.dataset.rprice).price=+e.value||0;save()});qa('[data-rone]').forEach(e=>e.onchange=()=>{route(e.dataset.rone).one=+e.value||0;save()});qa('[data-rround]').forEach(e=>e.onchange=()=>{route(e.dataset.rround).round=+e.value||0;save()});qa('[data-rmode]').forEach(e=>e.onchange=()=>{route(e.dataset.rmode).mode=e.value.trim();save()});qa('[data-rdel]').forEach(e=>e.onclick=()=>{let id=e.dataset.rdel;if(s.buses.some(b=>b.routeId===id))return alert('Cet axe est encore affecté à un bus. Change d’abord l’axe du bus.');if(confirm('Supprimer cet axe ?')){s.routes=s.routes.filter(r=>r.id!==id);save()}})}
 $('#addRoute').onclick=()=>{let id='axe-'+Date.now();s.routes.push({id,name:'Nouvel axe',price:0,one:0,round:0,mode:'À définir'});save();setTimeout(()=>{let e=$('[data-rname="'+id+'"]');if(e){e.focus();e.select()}},0)};
